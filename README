@@ -1,0 +1,6 @@
+I wrote this because I've written a few dozen cppunit test classes and
+can never remember the include to include what I need for cppunit, or
+the name of the class I need to inherit my test class from.
+
+As far as I'm concerned copyright can't even be applied to this 2 line
+file, so do whatever you want with it.

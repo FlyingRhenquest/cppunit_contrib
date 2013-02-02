@@ -1,0 +1,6 @@
+// A very little helper
+
+#include <cppunit/extensions/HelperMacros.h>
+
+// It's the only CPP unit test class I ever use
+typedef CppUnit::TestFixture test_class;

@@ -1,0 +1,4 @@
+// A very little helper
+
+#include <cppunit/extensions/HelperMacros.h>
+

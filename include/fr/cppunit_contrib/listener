@@ -1,0 +1,193 @@
+/**
+ * Copyright 2018 Bruce Ide
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * This is a test listener for cppunit. It's designed to watch a test
+ * suite and assemble a report of all the tests in the suite and
+ * if any failures occurred in the entire suite. I'm writing this
+ * because I have a tendency to use a lot of logging and it's
+ * easy to miss a test failure. With this listener, everything
+ * I need to know will be reported after the test run.
+ */
+
+#ifndef _HPP_FR_CPPUNIT_LISTENER
+#define _HPP_FR_CPPUNIT_LISTENER
+
+#include <cppunit/Exception.h>
+#include <cppunit/SourceLine.h>
+#include <cppunit/TestFailure.h>
+#include <cppunit/TestListener.h>
+#include <cppunit/Test.h>
+#include <chrono>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <sstream>
+#include <vector>
+
+namespace fr {
+
+  namespace cppunit_contrib {
+
+    class listener : public CppUnit::TestListener {
+
+    private:
+      
+      // This is data for one test
+      struct test_data {
+	typedef std::unique_ptr<test_data> pointer;
+	std::string name;
+	bool passed;
+	std::unique_ptr<CppUnit::TestFailure> failure; // Set if passed is false
+	std::chrono::high_resolution_clock::time_point start_time;
+	std::chrono::high_resolution_clock::time_point end_time;
+	std::chrono::milliseconds run_time;
+
+	static pointer create(CppUnit::Test *test)
+	{
+	  return std::move(std::make_unique<test_data>(test));
+	}
+
+	test_data(CppUnit::Test *test) : name(test->getName()), passed(true)
+	{	  
+	}
+
+	~test_data()
+	{
+	}
+					      
+      };
+
+      std::vector<test_data::pointer> all_tests;
+      // current_test is created when a test is started and pushed into
+      // the all_tests vector when it ends.
+      test_data::pointer current_test;
+
+    protected:
+      // I'm going to use these for logging test headers and footers in another
+      // class
+
+      virtual void _test_start(CppUnit::Test *test)
+      {
+      }
+
+      virtual void _test_end(CppUnit::Test *test)
+      {
+      }
+
+      virtual void _test_failed(const CppUnit::TestFailure &failure)
+      {
+      }
+
+    public:
+
+      bool all_tests_passed;
+
+      listener() : all_tests_passed(true)
+      {
+      }
+
+      virtual ~listener()
+      {
+      }
+
+      void startTest(CppUnit::Test *test) override
+      {
+	_test_start(test);
+	current_test = test_data::create(test);
+	test_data *data = current_test.get();
+	current_test->start_time = std::chrono::high_resolution_clock::now();
+      }
+
+      void endTest(CppUnit::Test *test) override
+      {
+	_test_end(test);
+	test_data *data = current_test.get();
+	data->end_time = std::chrono::high_resolution_clock::now();
+	// It'll typically be in microseconds or something.
+	data->run_time = std::chrono::duration_cast<std::chrono::milliseconds>(data->end_time - data->start_time);
+	data = nullptr; // I'm done with the pointer, which is still stored in current_test
+	all_tests.push_back(std::move(current_test));
+      }
+
+      void addFailure(const CppUnit::TestFailure &failure) override
+      {
+	test_data *data = current_test.get();
+	if (nullptr == data) {
+	  // This should never happen, right?
+	  throw std::logic_error("Attempt to add a test failure with no current test running.");
+	}
+	_test_failed(failure);
+	
+	data->passed = false;
+	all_tests_passed = false;
+	// Copy failure for future reference
+	data->failure = std::unique_ptr<CppUnit::TestFailure>(failure.clone());
+      }
+
+      // get_report will only work once as written, as it'll its vector as
+      // it builds the report. I only plan to use it once, so I'm OK with that.
+      // It's pretty easy to change to not eat the vector if you want to be able
+      // to call it more than once.
+      
+      virtual std::string get_report()
+      {
+	std::stringstream report_stream;
+	report_stream << "***** Test Report *****" << std::endl;
+	
+	while(all_tests.size() > 0) {
+	  test_data *data = all_tests.front().get();
+	  report_stream << data->name << " : ";
+	  if (data->passed) {
+	    report_stream << "Pass " << data->run_time.count() << " ms";
+	    
+	  } else {
+	    report_stream << "FAILED";
+	    CppUnit::TestFailure *failure = data->failure.get();
+	    if (nullptr != failure) {
+	      if (failure->isError()) {
+		CppUnit::Exception *e = failure->thrownException();
+		report_stream << " exception";
+		if (e->sourceLine().isValid()) {
+		  report_stream << " file " << e->sourceLine().fileName() << " line " << e->sourceLine().lineNumber();
+		}
+		report_stream << ": " << e->what();
+	      } else {
+		
+		if (failure->sourceLine().isValid()) {
+		  report_stream << " file " << failure->sourceLine().fileName() << " line " << failure->sourceLine().lineNumber();
+		}
+	      }
+	    }
+	  }
+	  report_stream << std::endl;
+	  data = nullptr;
+	  all_tests.erase(all_tests.begin());
+	}
+	report_stream << std::endl;
+	if (all_tests_passed) {
+	  report_stream << "*** ALL TESTS PASSED ***";
+	} else {
+	  report_stream << "*** SOME TESTS FAILED ***";
+	}
+	report_stream << std::endl;
+	return report_stream.str();
+      }
+      
+    };
+
+  }
+}
+
+#endif

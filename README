@@ -1,6 +1,50 @@
-I wrote this because I've written a few dozen cppunit test classes and
-can never remember the include to include what I need for cppunit, or
-the name of the class I need to inherit my test class from.
+This project provides a test listener and an example test runner for cppunit. The test listener
+collects test results during a run and prints a summary at the end of the run. If there are
+any failures, it'll try to list out the file and line where the failure occurred.
 
-As far as I'm concerned copyright can't even be applied to this 2 line
-file, so do whatever you want with it.
+There are three failure modes I pay attention to:
+
+ * ASSERT failures - These will cause a "test failed" report and should include a file
+                     name and line number in the report.
+ * Uncaught exception - Will cause a "test failed" report with the e.what() of the
+                        exception.
+ * Actual crash - I don't catch these, but the way I'm running the tests with ctest,
+                  ctest should report the crash.
+
+
+The test directory of this project actually has tests that are designed to fail, so
+you can get a look at what it looks like with:
+
+cd /tmp
+mkdir build
+cd build
+cmake ~/sandbox/cppunit_contrib
+make
+ctest --verbose
+
+Each test file you create should have one or more tests in it. My listener
+reports for each test in the executable, and then ctest reports for all the
+tests it ran:
+
+1: Test command: /tmp/build/basic_test
+1: Test timeout computed to be: 10000000
+1: ***** Test Report *****
+1: basic_test::test_pass : Pass 0 ms
+1: basic_test::test_fail : FAILED file /home/greyfox/sandbox/cppunit_contrib/test/basic_test.cpp line 41
+1: 
+1: *** SOME TESTS FAILED ***
+
+The following tests FAILED:
+	  1 - basic_test (Failed)
+	  2 - exception_test (Failed)
+	  3 - segv_test (SEGFAULT)
+Errors while running CTest
+
+Installation:
+
+make install will install the headers in the include prefix include directory. By
+default this is /usr/local/include. The files installed are fr/cppunit and
+fr/cppunit_config/listener. I also install the test runner in CMAKE_INSTALL_DOCDIR,
+which should be /usr/local/share/doc/cppunit_contrib. You can just point your own
+cmake files at the cpp file in that directory unless you want to chagne the
+test runner in some way. Feel free to copy mine and change it. It's pretty generic.
